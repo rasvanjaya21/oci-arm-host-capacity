@@ -20,6 +20,13 @@ jobs:
     name: integration-tests (PHP ${{ matrix.php-versions }})
     steps:
       - uses: actions/checkout@v1
+      - name : Push Telegram Notification
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_BOT_API_KEY }}
+          to: ${{ secrets.TELEGRAM_USER_ID }}
+          message: echo "Hello World"
+          
       - name: Install PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -63,4 +70,3 @@ jobs:
           AD_ALWAYS_FREE: ${{ secrets.AD_ALWAYS_FREE }}
           TEST_IMAGE_ID: ${{ secrets.TEST_IMAGE_ID }}
           TEST_SUBNET_ID: ${{ secrets.TEST_SUBNET_ID }}
-
