@@ -19,7 +19,7 @@ jobs:
         php-versions: ['7.4']
     name: integration-tests (PHP ${{ matrix.php-versions }})
     steps:
-      - uses: appleboy/telegram-action@master
+#       - uses: appleboy/telegram-action@master
 #         with:
 #           token: ${{ secrets.TELEGRAM_BOT_API_KEY }}
 #           to: ${{ secrets.TELEGRAM_USER_ID }}
