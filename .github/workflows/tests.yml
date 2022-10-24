@@ -1,4 +1,4 @@
-name: Tests V2.0.1
+name: Tests V2.0.2
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         with:
           token: ${{ secrets.TELEGRAM_BOT_API_KEY }}
           to: ${{ secrets.TELEGRAM_USER_ID }}
-          message: echo "Hello World"
+          message: running rasvanjaya21/oci-arm-host-capacity from scheduled
           
       - name: Install PHP
         uses: shivammathur/setup-php@v2
