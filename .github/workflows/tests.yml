@@ -20,9 +20,9 @@ jobs:
     name: integration-tests (PHP ${{ matrix.php-versions }})
     steps:
       - uses: appleboy/telegram-action@master
-        with:
-          token: ${{ secrets.TELEGRAM_BOT_API_KEY }}
-          to: ${{ secrets.TELEGRAM_USER_ID }}
+#         with:
+#           token: ${{ secrets.TELEGRAM_BOT_API_KEY }}
+#           to: ${{ secrets.TELEGRAM_USER_ID }}
           
       - uses: actions/checkout@v1
       - name: Install PHP
@@ -63,8 +63,8 @@ jobs:
           OCI_SHAPE: ${{ secrets.OCI_SHAPE }}
           OCI_MAX_INSTANCES: ${{ secrets.OCI_MAX_INSTANCES }}
           OCI_SSH_PUBLIC_KEY: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
-#           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-#           TELEGRAM_BOT_API_KEY: ${{ secrets.TELEGRAM_BOT_API_KEY }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          TELEGRAM_BOT_API_KEY: ${{ secrets.TELEGRAM_BOT_API_KEY }}
           AD_ALWAYS_FREE: ${{ secrets.AD_ALWAYS_FREE }}
           TEST_IMAGE_ID: ${{ secrets.TEST_IMAGE_ID }}
           TEST_SUBNET_ID: ${{ secrets.TEST_SUBNET_ID }}
