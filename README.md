@@ -1,4 +1,4 @@
-# Resolving Oracle Cloud "Out of Capacity" issue and getting free VPS with 4 ARM cores / 24GB of memory
+# Resolving Oracle Cloud "Out of Capacity" issue and getting free VPS with 2 ARM cores / 12GB of memory
 
 <p align="center">
   <a href="https://github.com/hitrov/oci-arm-host-capacity/actions"><img src="https://github.com/hitrov/oci-arm-host-capacity/workflows/Tests/badge.svg" alt="Test"></a>
@@ -8,7 +8,7 @@
 
 Very neat and useful configuration was recently [announced](https://blogs.oracle.com/cloud-infrastructure/post/moving-to-ampere-a1-compute-instances-on-oracle-cloud-infrastructure-oci) at Oracle Cloud Infrastructure (OCI) blog as a part of Always Free tier. Sometimes it's complicated to launch an instance due to the "Out of Capacity" error. Here we're solving that issue as Oracle constantly adds capacity from time to time.
 
-> Each tenancy gets the first 3,000 OCPU hours and 18,000 GB hours per month for free to create Ampere A1 Compute instances using the VM.Standard.A1.Flex shape (equivalent to 4 OCPUs and 24 GB of memory).
+> Each tenancy gets the first 1,500 OCPU hours and 9,000 GB hours per month for free to create Ampere A1 Compute instances using the VM.Standard.A1.Flex shape (equivalent to 2 OCPUs and 12 GB of memory). **Update:** Oracle enforces this limit from 2026-08-18; instances above it are terminated automatically.
 
 This approach requires **PHP 7.x or 8.x** and **composer** installed and will call "LaunchInstance" OCI API [endpoint](https://docs.oracle.com/en-us/iaas/api/#/en/iaas/20160918/Instance/LaunchInstance). We'll utilise the [package](https://packagist.org/packages/hitrov/oci-api-php-request-sign) which I've written (and [published](https://github.com/hitrov/oci-api-php-request-sign)) some time ago, here's the [article](https://hitrov.medium.com/creating-mini-php-sdk-to-sign-oracle-cloud-infrastructure-api-requests-d91a224c7008?sk=5b4405c1124bfeac30a370630fd94126).
 
@@ -152,9 +152,25 @@ Change `OCI_SSH_PUBLIC_KEY` inside double quotes - paste the contents above (or 
 
 #### Optional
 
-`OCI_OCPUS` and `OCI_MEMORY_IN_GBS` are set `4` and `24` by default. Of course, you can safely adjust them. 
-Possible values are 1/6, 2/12, 3/18 and 4/24, respectively.
+`OCI_OCPUS` and `OCI_MEMORY_IN_GBS` are set `2` and `12` by default. Of course, you can safely adjust them. 
+Possible values are 1/6 and 2/12, respectively.
 Please notice that "Oracle Linux Cloud Developer" image can be created with at least 8GB of RAM (`OCI_MEMORY_IN_GBS`).
+
+Since 2026-08-18 the Always Free limit is **2 OCPUs and 12 GB in total** for all `VM.Standard.A1.Flex` instances: one instance with 2/12 (`OCI_MAX_INSTANCES=1`) or two with 1/6 (`OCI_MAX_INSTANCES=2`).
+You can check it in Console -> Governance -> Limits, Quotas and Usage -> Compute -> `standard-a1-core-count`.
+
+Any ARM (aarch64) image works for `OCI_IMAGE_ID`, e.g. Canonical Ubuntu 24.04 (default SSH user is `ubuntu`). 
+Image OCIDs per region are listed at https://docs.oracle.com/en-us/iaas/images/ubuntu-2404/ - pick the `aarch64` build (not Minimal) and copy the OCID of your region.
+Old builds get deprecated, so update `OCI_IMAGE_ID` if instance creation fails because of the image.
+
+##### Notifications (Telegram)
+
+Set `TELEGRAM_BOT_API_KEY` (token from [@BotFather](https://t.me/BotFather)) and `TELEGRAM_USER_ID` (your numeric ID, ask [@userinfobot](https://t.me/userinfobot)). 
+Send `/start` to your bot first, otherwise Telegram won't let it message you.
+You get a message when:
+- the instance is created (instance details as JSON);
+- the config is broken, i.e. any error other than `Out of host capacity` (wrong key, limits exceeded, invalid subnet/image...). 
+`Out of host capacity` is expected on each run and is only logged.
 
 If for some reason your home region is running out of Always free AMD x64 (1/8 OPCU + 1GB RAM), replace values below.
 **NB!** Setting the `OCI_AVAILABILITY_DOMAIN` to `Always Free Eligible` is mandatory for non-ARM architecture!
@@ -249,7 +265,12 @@ In order to test the script using GitHub runners (their virtual machines) please
 
 *NB!* No need to double quote any value here!
 
-5. As for the private key, you have 2 options. Either:
+5. Secrets to set: all `OCI_*` values from `.env` (including `OCI_AVAILABILITY_DOMAIN`, e.g. `fEux:AP-SINGAPORE-1-AD-1`) and optionally `TELEGRAM_BOT_API_KEY`, `TELEGRAM_USER_ID`. 
+Update them when something changes (e.g. `gh secret set OCI_OCPUS --body 2`). GitHub never shows secret values back, only names and dates.
+
+5a. As for the private key, the simplest and safest way is to store the PEM content in a secret `OCI_PRIVATE_KEY`. 
+The workflow `.github/workflows/oci-arm.yml` writes it to a temporary file and sets `OCI_PRIVATE_KEY_FILENAME` by itself. 
+Otherwise you have 2 options (then edit the workflow and use the secret `OCI_PRIVATE_KEY_FILENAME` with the URL). Either:
 - upload to any web server accessible from the Internet by using just URL or...
 - upload in the [bucket](https://cloud.oracle.com/object-storage/buckets) and `Create Pre-Authenticated Request`. 
 
@@ -258,15 +279,11 @@ In order to test the script using GitHub runners (their virtual machines) please
 6. Copy and save the URL from (5) as `OCI_PRIVATE_KEY_FILENAME` GitHub secret.
 7. Go to any other directory e.g. `cd /Users/hitrov`
 8. `git clone https://github.com/{your-username}/oci-arm-host-capacity`
-9. Adjust the file `.github/workflows/tests.yml` according to [this commit](https://github.com/hitrov/oci-arm-host-capacity/commit/67fe41ebfb9f385ae1614c97b74195ea318c8db7), just execute:
+9. The workflow `.github/workflows/oci-arm.yml` is already in this repository (cron `*/5 * * * *`, also runnable manually via `workflow_dispatch`). Push it to your fork:
 ```bash
-git checkout 67fe41ebfb9f385ae1614c97b74195ea318c8db7 -- .github/workflows/tests.yml
-```
-10. Commit and push this file
-```bash
-git commit -m "Modify workflow to test out periodic job" .github/workflows/tests.yml
 git push origin main
 ```
+10. Make sure `Actions` are enabled for your fork.
 11. Go to `https://github.com/{your-username}/oci-arm-host-capacity/actions` and check how `Run script` job. 
 
 Here's the example https://github.com/hitrov/oci-arm-host-capacity/runs/4727904401?check_suite_focus=true
@@ -280,8 +297,10 @@ Here's the example https://github.com/hitrov/oci-arm-host-capacity/runs/47279044
 Specific GitHub Workflows [commit](https://github.com/hitrov/oci-arm-host-capacity/commit/67fe41ebfb9f385ae1614c97b74195ea318c8db7) 
 used in the [Setup](#setup) take an advantage of [Scheduled events](https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#scheduled-events)  
 and **will endlessly run the script every 5-20 minutes** (how exactly often - depends on runners' availability). 
+GitHub cron can't go below 5 minutes (`*/5 * * * *`), may skip runs under load, and disables scheduled workflows after 60 days without repository activity. 
+Free Tier accounts get no capacity priority, so `Out of host capacity` is common until a slot appears. 
 
-**NB!** After you're done with testing, **immediately delete .github/workflows/tests.yml** (because you don't need integration tests - they're written taking into account instances that I have) and push to the `main` branch 
+**NB!** After you're done with testing, **immediately delete .github/workflows/oci-arm.yml** and push to the `main` branch 
 because infinite run actually violates the [Terms of Use](https://docs.github.com/en/github/site-policy/github-terms-for-additional-products-and-features#actions):
 ```
 Actions should not be used for:
@@ -296,8 +315,8 @@ or the disabling of repositories created to run Actions in a way that violates t
 
 This is how you do:
 ```bash
-git rm .github/workflows/tests.yml
-git commit -m "Delete workflow file" .github/workflows/tests.yml
+git rm .github/workflows/oci-arm.yml
+git commit -m "Delete workflow file" .github/workflows/oci-arm.yml
 git push origin main
 ```
 
@@ -307,7 +326,7 @@ Before the instance creation, script will:
 1. Call [ListAvailabilityDomains](https://docs.oracle.com/en-us/iaas/api/#/en/identity/20160918/AvailabilityDomain/ListAvailabilityDomains) OCI API method
 2. Call [ListInstances](https://docs.oracle.com/en-us/iaas/api/#/en/iaas/20160918/Instance/ListInstances) OCI API method
 and check whether there're already existing instances with the same `OCI_SHAPE`, 
-as well as number of them `OCI_MAX_INSTANCES` (you can safely adjust the last one if you wanna e.g. two `VM.Standard.A1.Flex` with 2/12 - 2 OCPUs and 12GB RAM - each).
+as well as number of them `OCI_MAX_INSTANCES` (you can safely adjust the last one if you wanna e.g. two `VM.Standard.A1.Flex` with 1/6 - 1 OCPU and 6GB RAM - each).
 
 Script won't create new instance if current (actual) number return from the API exceeds the one from `OCI_MAX_INSTANCES` variable.
 
