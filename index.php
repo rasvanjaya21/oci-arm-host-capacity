@@ -101,6 +101,9 @@ foreach ($availabilityDomains as $availabilityDomainEntity) {
             strpos($message, 'InternalError') !== false &&
             strpos($message, 'Out of host capacity') !== false
         ) {
+            if ($notifier->isSupported()) {
+                $notifier->notify("oci-arm-host-capacity: out of host capacity ($availabilityDomain)");
+            }
             // trying next availability domain
             sleep(16);
             continue;
