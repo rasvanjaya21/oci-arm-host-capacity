@@ -97,13 +97,11 @@ foreach ($availabilityDomains as $availabilityDomainEntity) {
         $message = $e->getMessage();
         echo "$message\n";
         if (
-            $e->getCode() === 500 &&
+            ($e->getCode() === 500 &&
             strpos($message, 'InternalError') !== false &&
-            strpos($message, 'Out of host capacity') !== false
+            strpos($message, 'Out of host capacity') !== false) ||
+            strpos($message, 'TooManyRequests') !== false
         ) {
-            if ($notifier->isSupported()) {
-                $notifier->notify("oci-arm-host-capacity: out of host capacity ($availabilityDomain)");
-            }
             // trying next availability domain
             sleep(16);
             continue;
@@ -124,4 +122,9 @@ foreach ($availabilityDomains as $availabilityDomainEntity) {
     }
 
     return;
+}
+
+// every availability domain failed with a retryable error (success/fatal paths return above)
+if ($notifier->isSupported()) {
+    $notifier->notify("oci-arm-host-capacity: out of host capacity");
 }
