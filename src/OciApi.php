@@ -6,6 +6,9 @@ namespace Hitrov;
 
 use Hitrov\Exception\ApiCallException;
 use Hitrov\Exception\CurlException;
+use Hitrov\Interfaces\CacheInterface;
+use Hitrov\Exception\TooManyRequestsWaiterException;
+use Hitrov\Interfaces\TooManyRequestsWaiterInterface;
 use Hitrov\OCI\Signer;
 use JsonException;
 
@@ -15,6 +18,9 @@ class OciApi
      * @var array
      */
     private $existingInstances;
+
+    private CacheInterface $cache;
+    private TooManyRequestsWaiterInterface $waiter;
 
     /**
      * @param OciConfig $config
@@ -37,6 +43,16 @@ class OciApi
         string $availabilityDomain
     ): array
     {
+        if (isset($this->waiter) && $this->waiter->isConfigured()) {
+            if ($this->waiter->isTooEarly()) {
+                throw new TooManyRequestsWaiterException(
+                    "Will retry after {$this->waiter->secondsRemaining()} seconds",
+                );
+            }
+
+            $this->waiter->remove();
+        }
+
         $displayName = 'instance-' . date('Ymd-Hi');
 
         $body = <<<EOD
@@ -81,7 +97,21 @@ EOD;
 
         $baseUrl = "{$this->getBaseApiUrl($config)}/instances/";
 
-        return $this->call($config, $baseUrl, 'POST', $body);
+        try {
+            return $this->call($config, $baseUrl, 'POST', $body);
+        } catch(ApiCallException $e) {
+            $message = $e->getMessage();
+            if ($e->getCode() != 429 && strpos($message, 'TooManyRequests') === false) {
+                throw $e;
+            }
+
+            if (!isset($this->waiter) || !$this->waiter->isConfigured()) {
+                throw $e;
+            }
+
+            $this->waiter->enable();
+            throw new TooManyRequestsWaiterException($message);
+        }
     }
 
     /**
@@ -139,10 +169,22 @@ EOD;
      */
     public function getAvailabilityDomains(OciConfig $config): array
     {
-        $baseUrl = "{$this->getBaseApiUrl($config, 'identity')}/availabilityDomains/";
-        $params = ['compartmentId' => $config->tenancyId];
+        $data = null;
+        if (getenv('CACHE_AVAILABILITY_DOMAINS') && isset($this->cache)) {
+            $data = $this->cache->get('getAvailabilityDomains');
+        }
 
-        return $this->call($config, $baseUrl, 'GET', null, $params);
+        if (!$data) {
+            $baseUrl = "{$this->getBaseApiUrl($config, 'identity')}/availabilityDomains/";
+            $params = ['compartmentId' => $config->tenancyId];
+
+            $data = $this->call($config, $baseUrl, 'GET', null, $params);
+            if (getenv('CACHE_AVAILABILITY_DOMAINS') && isset($this->cache)) {
+                $this->cache->add($data, 'getAvailabilityDomains');
+            }
+        }
+
+        return $data;
     }
 
     /**
@@ -151,6 +193,11 @@ EOD;
     public function getExistingInstances(): array
     {
         return $this->existingInstances;
+    }
+
+    public function setCache(CacheInterface $cache): void
+    {
+        $this->cache = $cache;
     }
 
     /**
@@ -168,7 +215,7 @@ EOD;
      * @throws OCI\Exception\SigningValidationFailedException
      * @throws CurlException
      */
-    private function call(
+    public function call(
         OciConfig $config,
         string $baseUrl = '',
         string $method = 'GET',
@@ -208,6 +255,11 @@ EOD;
         }
 
         return HttpClient::getResponse($curlOptions);
+    }
+
+    public function setWaiter(TooManyRequestsWaiterInterface $waiter): void
+    {
+        $this->waiter = $waiter;
     }
 
     private function getBaseApiUrl(OciConfig $config, string $api = 'iaas'): string

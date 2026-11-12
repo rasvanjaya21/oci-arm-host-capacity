@@ -5,8 +5,11 @@ namespace Hitrov\Test;
 
 
 use Hitrov\Exception\ApiCallException;
+use Hitrov\Exception\TooManyRequestsWaiterException;
+use Hitrov\FileCache;
 use Hitrov\OciApi;
 use Hitrov\Test\Traits\DefaultConfig;
+use Hitrov\TooManyRequestsWaiter;
 use PHPUnit\Framework\TestCase;
 
 class OciApiTest extends TestCase
@@ -81,13 +84,67 @@ class OciApiTest extends TestCase
         self::$api->createInstance(self::$config, getenv('OCI_SHAPE'), getenv('OCI_SSH_PUBLIC_KEY'), getenv('OCI_AVAILABILITY_DOMAIN'));
     }
 
+    public function testWithCache(): void
+    {
+        $cache = new FileCache(self::$config);
+        $cache->add([1, 'one'], 'getAvailabilityDomains');
+
+        self::$api->setCache($cache);
+
+        putenv('CACHE_AVAILABILITY_DOMAINS=1');
+
+        $this->assertEquals(
+            [1, 'one'],
+            self::$api->getAvailabilityDomains(self::$config),
+        );
+
+        putenv('CACHE_AVAILABILITY_DOMAINS=');
+        unlink(sprintf('%s/%s', getcwd(), 'oci_cache.json'));
+    }
+
+    public function testWithoutCache(): void
+    {
+        $mock = $this->getMockBuilder(OciApi::class)
+            ->onlyMethods(['call'])
+            ->getMock();
+
+        $mock->expects($this->once())
+            ->method('call')
+            ->willReturn(['foo']);
+
+        $this->assertEquals(
+            ['foo'],
+            $mock->getAvailabilityDomains(self::$config),
+        );
+    }
+
+    public function testWhenCacheObjectNotSet(): void
+    {
+        putenv('CACHE_AVAILABILITY_DOMAINS=1');
+
+        $mock = $this->getMockBuilder(OciApi::class)
+            ->onlyMethods(['call'])
+            ->getMock();
+
+        $mock->expects($this->once())
+            ->method('call')
+            ->willReturn(['foo']);
+
+        $this->assertEquals(
+            ['foo'],
+            $mock->getAvailabilityDomains(self::$config),
+        );
+
+        putenv('CACHE_AVAILABILITY_DOMAINS=');
+    }
+
     protected function setEnv(): void
     {
         putenv('OCI_SHAPE=VM.Standard.E2.1.Micro');
         putenv('OCI_OCPUS=1');
         putenv('OCI_MEMORY_IN_GBS=1');
-        putenv('OCI_AVAILABILITY_DOMAIN=FeVO:EU-FRANKFURT-1-AD-2');
-        putenv('OCI_IMAGE_ID=ocid1.image.oc1.eu-frankfurt-1.aaaaaaaado5423wtoss2ogoj2xpr4wssqsfy7yeafyekiywhuep7wnvwpvuq');
-        putenv('OCI_SUBNET_ID=ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaaahbb6t2jetpfmfi5kn7ypi4w6pn3qt6s3k4xzvwxmjt3tjmv3faq');
+        putenv('OCI_AVAILABILITY_DOMAIN=jYtI:PHX-AD-1');
+        putenv('OCI_IMAGE_ID=ocid1.image.oc1.phx.aaaaaaaaasn6ek63v5gdpifr5emn6mtojzebcpewo4mvionam2btsoasy6sq');
+        putenv('OCI_SUBNET_ID=ocid1.subnet.oc1.phx.aaaaaaaaidceersp3gaeew4u5xkogozc6pufcuanqg3age4putpwsiqj77kq');
     }
 }
